@@ -26,22 +26,14 @@ std::optional<HttpRequest> HttpConnection::readRequest() {
         return std::nullopt;
     }
 
-    mBuffer.append(buf, bytes);
-
-    size_t headerEnd = mBuffer.find("\r\n\r\n");
-    if (headerEnd == std::string::npos) {
-        return std::nullopt;
-    }
-
-    HttpRequest req;
-    if (!parseRequest(req)) {
-        return std::nullopt;
-    }
-
     mLastActive = std::chrono::steady_clock::now();
 
-    req.clientFd = mFd;
-    return req;
+    mParse.appendData(buf, bytes);
+    auto reqOpt = mParse.parseRequest();
+    if (reqOpt) {
+        reqOpt->clientFd = mFd;
+    }
+    return reqOpt;
 
 }
 
@@ -61,67 +53,6 @@ bool HttpConnection::writeResponse(const HttpResponse &response) const {
             return false;
         }
         totalSent += sent;
-    }
-
-    return true;
-}
-
-bool HttpConnection::parseRequest(HttpRequest &outRequest) {
-    std::istringstream ss(mBuffer);
-    std::string line;
-
-    if (!std::getline(ss, line) || line.empty()) {
-        return false;
-    }
-
-    if (line.back() == '\r') {
-        line.pop_back();
-    }
-
-    std::istringstream reqLine(line);
-    reqLine >> outRequest.method >> outRequest.path;
-
-    // ----- 2. Headers -----
-    while (std::getline(ss, line) && line != "\r") {
-        if (line.back() == '\r') {
-            line.pop_back();
-        }
-
-        size_t pos = line.find(':');
-        if (pos == std::string::npos) {
-            continue;
-        }
-
-        std::string key = line.substr(0, pos);
-        std::string value = line.substr(pos + 1);
-        value.erase(value.begin(), std::ranges::find_if(value,
-                                                        [](const unsigned char c) { return !isspace(c); }));
-        outRequest.headers[key] = value;
-    }
-
-    // ----- 3. Body -----
-    std::string body;
-    auto it = outRequest.headers.find("Content-Length");
-    if (it != outRequest.headers.end()) {
-        int len = std::stoi(it->second);
-        size_t bodyStart = mBuffer.find("\r\n\r\n") + 4;
-        if (mBuffer.size() >= bodyStart + len) {
-            body = mBuffer.substr(bodyStart, len);
-        }
-    }
-
-    auto ct = outRequest.headers.find("Content-Type");
-    if (ct != outRequest.headers.end()) {
-        std::string ctVal = ct->second;
-        std::ranges::transform(ctVal, ctVal.begin(), ::tolower);
-
-        if (ctVal.find("application/json") != std::string::npos) {
-            try {
-                outRequest.body = nlohmann::json::parse(body);
-            } catch (const std::exception& e) {
-                std::cerr << "[HttpConnection] JSON parse error: " << e.what() << std::endl;
-            }
-        }
     }
 
     return true;

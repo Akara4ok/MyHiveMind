@@ -2,7 +2,7 @@
 // Created by vlad on 10/16/25.
 //
 
-#include "WebServer.h"
+#include "HttpServer.h"
 
 #include <iostream>
 #include <sys/socket.h>
@@ -16,26 +16,27 @@ namespace {
     int timeOut = 5;
 }
 
-WebServer::WebServer(int port, std::shared_ptr<SafeQueue<HttpRequest>> queue) : mPort(port), mQueue(std::move(queue)) {
+HttpServer::HttpServer(int port, std::shared_ptr<SafeQueue<Task>> queue) : mPort(port), mQueue(std::move(queue)) {
 }
 
-WebServer::~WebServer() {
+HttpServer::~HttpServer() {
     stop();
 }
 
-void WebServer::start() {
+void HttpServer::start() {
     if (mRunning) {
         return;
     }
     mRunning = true;
-    mThread = std::thread(&WebServer::run, this);
+    mThread = std::thread(&HttpServer::run, this);
 }
 
-void WebServer::stop() {
+void HttpServer::stop() {
     if (!mRunning) {
         return;
     }
 
+    mRunning = false;
     for (const auto &fd: mConnections | std::views::keys) {
         epoll_ctl(mEpollFd, EPOLL_CTL_DEL, fd, nullptr);
         close(fd);
@@ -51,10 +52,25 @@ void WebServer::stop() {
     if (mThread.joinable()) {
         mThread.join();
     }
-    mRunning = false;
 }
 
-void WebServer::run() {
+Task HttpServer::requestToTask(const HttpRequest &request) {
+    Task task{};
+    task.clientFd = request.clientFd;
+
+    auto body = request.body;
+    try {
+        int taskType = body.value("commandType", 0);
+        task.type = Task::intToType(taskType);
+        task.arguments = body.value("commandPayload", nlohmann::json{});
+    } catch (...) {
+        std::cerr << "Failed to parse request body" << std::endl;
+    }
+
+    return task;
+}
+
+void HttpServer::run() {
     mListenFd = socket(AF_INET, SOCK_STREAM, 0);
     if (mListenFd < 0) {
         std::cerr << "socket() failed" << std::endl;
@@ -126,7 +142,7 @@ void WebServer::run() {
     std::cout << "[WebServer] Shutting down..." << std::endl;
 }
 
-void WebServer::handleNewConnection() {
+void HttpServer::handleNewConnection() {
     while (true) {
         sockaddr_in clientAddr{};
         socklen_t clientLen = sizeof(clientAddr);
@@ -150,7 +166,7 @@ void WebServer::handleNewConnection() {
     }
 }
 
-void WebServer::handleClientData(int clientFd) {
+void HttpServer::handleClientData(int clientFd) {
     if (!mQueue) {
         std::cerr << "[WebServer] No message queue." << std::endl;
         return;
@@ -165,12 +181,12 @@ void WebServer::handleClientData(int clientFd) {
     auto reqOpt = conn->readRequest();
 
     if (reqOpt) {
-        mQueue->push_back(*reqOpt);
+        mQueue->push_back(requestToTask(*reqOpt));
         conn->mLastActive = std::chrono::steady_clock::now();
     }
 }
 
-void WebServer::closeInactiveConnections() {
+void HttpServer::closeInactiveConnections() {
     auto now = std::chrono::steady_clock::now();
     for (auto it = mConnections.begin(); it != mConnections.end();) {
         auto& conn = it->second;

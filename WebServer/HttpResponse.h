@@ -16,11 +16,10 @@ public:
     void setBody(const nlohmann::json& jsonBody);
     std::string serialize() const;
 
-private:
-    int mStatusCode = 0;
-    std::string mStatusMessage;
-    std::unordered_map<std::string, std::string> mHeaders;
-    std::string mBody;
+    int statusCode = 0;
+    std::string statusMessage;
+    std::unordered_map<std::string, std::string> headers;
+    nlohmann::json body;
 };
 
 

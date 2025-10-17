@@ -14,7 +14,7 @@ struct HttpRequest {
     std::string path;
     std::unordered_map<std::string, std::string> headers;
     nlohmann::json body;
-    int clientFd;
+    int clientFd{};
 };
 
 

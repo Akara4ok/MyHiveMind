@@ -12,7 +12,7 @@ add_executable(MyTests
         test_response.cpp
 )
 
-target_link_libraries(MyTests PRIVATE Common Catch2::Catch2WithMain)
+target_link_libraries(MyTests PRIVATE Common WebServer Catch2::Catch2WithMain)
 
 include(Catch)
 catch_discover_tests(MyTests)

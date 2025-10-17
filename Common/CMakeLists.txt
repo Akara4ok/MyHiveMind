@@ -1,6 +1,5 @@
 add_library(Common
-        HttpRequest.cpp HttpRequest.h
-        HttpResponse.cpp HttpResponse.h
+        Task.cpp Task.h
         SafeQueue.hpp
 )
 

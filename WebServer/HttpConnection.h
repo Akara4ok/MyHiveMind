@@ -8,6 +8,7 @@
 #include <optional>
 #include "HttpRequest.h"
 #include "HttpResponse.h"
+#include "HttpParser.h"
 
 class HttpConnection {
 public:
@@ -23,10 +24,10 @@ public:
 
     std::chrono::steady_clock::time_point mLastActive;
 private:
-    bool parseRequest(HttpRequest& outRequest);
 
     int mFd{};
     std::string mBuffer;
+    HttpParser mParse;
 };
 
 #endif //MYHIVEMIND_HTTPCONNECTION_H

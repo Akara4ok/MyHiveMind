@@ -5,10 +5,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "HttpResponse.h"
+#include "HttpServer.h"
+#include "HttpClient.h"
 #include <thread>
 #include <iostream>
 
-TEST_CASE("HttpResponse - Json", "[Common]") {
+TEST_CASE("HttpResponse - Json", "[WebServer]") {
     HttpResponse resp(200, "OK");
 
     nlohmann::json j;
@@ -16,5 +18,55 @@ TEST_CASE("HttpResponse - Json", "[Common]") {
     j["success"] = true;
     resp.setBody(j);
 
-    CHECK(resp.serialize() == "HTTP/1.1 200 OK\r\nContent-Length: 35\r\nContent-Type: application/json; charset=utf-8\r\nConnection: close\r\nServer: MyWebServer/1.0\r\n\r\n{\"message\":\"Hello!\",\"success\":true}");
+    auto l = resp.serialize();
+
+    CHECK(resp.serialize() == "HTTP/1.1 200 OK\r\nContent-Length: 35\r\nContent-Type: application/json; charset=utf-8\r\nConnection: keep-alive\r\nServer: MyWebServer/1.0\r\n\r\n{\"message\":\"Hello!\",\"success\":true}");
+}
+
+TEST_CASE("WebServer - ClientServerCommunication") {
+    std::shared_ptr<SafeQueue<Task>> safeQueue = std::make_shared<SafeQueue<Task>>();
+
+    HttpServer server(8000, safeQueue);
+    server.start();
+
+    int n = 5;
+
+    std::thread serverThread([safeQueue, n]() {
+        int received = 0;
+        while (received < n) {
+            auto reqOpt = safeQueue->pop_front();
+            if (reqOpt) {
+                received++;
+
+                HttpResponse resp;
+                nlohmann::json json;
+                json["received"] = received;
+                resp.setBody(json);
+
+                CHECK(reqOpt->arguments.value("index", 0) == received - 1);
+                CHECK(HttpConnection(reqOpt->clientFd).writeResponse(resp));
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    });
+
+    HttpClient client("http://localhost", 8000);
+    std::thread clientThread([&client, n]() {
+        for (int i = 0; i < n; ++i) {
+            nlohmann::json body;
+            body["commandType"] = 0;
+            nlohmann::json payload;
+            payload["index"] = i;
+            body["commandPayload"] = payload;
+            HttpResponse response = client.post("/", body);
+            CHECK(response.statusCode == 200);
+            CHECK(response.body.value("received", 0) == i + 1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    });
+
+    serverThread.join();
+    clientThread.join();
+
+    server.stop();
 }
