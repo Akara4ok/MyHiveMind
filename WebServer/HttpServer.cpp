@@ -16,7 +16,8 @@ namespace {
     int timeOut = 5;
 }
 
-HttpServer::HttpServer(int port, std::shared_ptr<SafeQueue<Task>> queue) : mPort(port), mQueue(std::move(queue)) {
+HttpServer::HttpServer(int port, std::shared_ptr<SafeQueue<HttpRequest>> queue) : mPort(port),
+    mQueue(std::move(queue)) {
 }
 
 HttpServer::~HttpServer() {
@@ -54,22 +55,6 @@ void HttpServer::stop() {
     }
 }
 
-Task HttpServer::requestToTask(const HttpRequest &request) {
-    Task task{};
-    task.clientFd = request.clientFd;
-
-    auto body = request.body;
-    try {
-        int taskType = body.value("commandType", 0);
-        task.type = Task::intToType(taskType);
-        task.arguments = body.value("commandPayload", nlohmann::json{});
-    } catch (...) {
-        std::cerr << "Failed to parse request body" << std::endl;
-    }
-
-    return task;
-}
-
 void HttpServer::run() {
     mListenFd = socket(AF_INET, SOCK_STREAM, 0);
     if (mListenFd < 0) {
@@ -85,7 +70,7 @@ void HttpServer::run() {
     addr.sin_port = htons(mPort);
     addr.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind(mListenFd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+    if (bind(mListenFd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0) {
         std::cerr << "bind() failed" << std::endl;
         close(mListenFd);
         return;
@@ -146,7 +131,7 @@ void HttpServer::handleNewConnection() {
     while (true) {
         sockaddr_in clientAddr{};
         socklen_t clientLen = sizeof(clientAddr);
-        int clientFd = accept(mListenFd, reinterpret_cast<sockaddr*>(&clientAddr), &clientLen);
+        int clientFd = accept(mListenFd, reinterpret_cast<sockaddr *>(&clientAddr), &clientLen);
         if (clientFd < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 break;
@@ -177,11 +162,11 @@ void HttpServer::handleClientData(int clientFd) {
         return;
     }
 
-    auto& conn = it->second;
+    auto &conn = it->second;
     auto reqOpt = conn->readRequest();
 
     if (reqOpt) {
-        mQueue->push_back(requestToTask(*reqOpt));
+        mQueue->push_back(*reqOpt);
         conn->mLastActive = std::chrono::steady_clock::now();
     }
 }
@@ -189,7 +174,7 @@ void HttpServer::handleClientData(int clientFd) {
 void HttpServer::closeInactiveConnections() {
     auto now = std::chrono::steady_clock::now();
     for (auto it = mConnections.begin(); it != mConnections.end();) {
-        auto& conn = it->second;
+        auto &conn = it->second;
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - conn->mLastActive).count();
         if (elapsed > timeOut) {
             epoll_ctl(mEpollFd, EPOLL_CTL_DEL, conn->fd(), nullptr);
@@ -199,5 +184,4 @@ void HttpServer::closeInactiveConnections() {
             ++it;
         }
     }
-
 }

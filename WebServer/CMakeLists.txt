@@ -1,11 +1,12 @@
 add_library(WebServer
+        HttpClient.cpp HttpClient.h
         HttpConnection.cpp HttpConnection.h
+        HttpParser.cpp HttpParser.h
         HttpRequest.cpp HttpRequest.h
         HttpResponse.cpp HttpResponse.h
         HttpServer.cpp HttpServer.h
-        HttpClient.cpp HttpClient.h
-        HttpParser.cpp
-        HttpParser.h
+        HttpClientWorker.cpp
+        HttpClientWorker.h
 )
 
 target_link_libraries(WebServer PRIVATE Common)

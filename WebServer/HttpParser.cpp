@@ -100,7 +100,7 @@ bool HttpParser::tryParseHeaders() {
 
         std::string key = line.substr(0, pos);
         std::string val = line.substr(pos + 1);
-        val.erase(val.begin(), std::ranges::find_if(val, [](unsigned char c){ return !std::isspace(c); }));
+        val.erase(val.begin(), std::ranges::find_if(val, [](unsigned char c) { return !std::isspace(c); }));
         mHeaders[key] = val;
     }
     return true;
@@ -122,6 +122,50 @@ bool HttpParser::tryParseBody() {
         mBodyRaw = mBuffer.substr(mHeaderEnd + 4, len);
         return true;
     }
+
+    auto itChunked = mHeaders.find("Transfer-Encoding");
+    if (itChunked != mHeaders.end() && itChunked->second.find("chunked") != std::string::npos) {
+        size_t pos = mHeaderEnd + 4;
+        std::string body;
+        while (true) {
+            size_t lineEnd = mBuffer.find("\r\n", pos);
+            if (lineEnd == std::string::npos) {
+                return false;
+            }
+
+            std::string chunkSizeHex = mBuffer.substr(pos, lineEnd - pos);
+            int chunkSize = 0;
+            try {
+                chunkSize = std::stoi(chunkSizeHex, nullptr, 16);
+            } catch (...) {
+                return false;
+            }
+
+            if (chunkSize == 0) {
+                size_t chunkEnd = lineEnd + 2 + 2;
+                if (mBuffer.size() < chunkEnd) {
+                    return false;
+                }
+                mBodyRaw = body;
+                return true;
+            }
+
+            size_t chunkDataStart = lineEnd + 2;
+            size_t chunkDataEnd = chunkDataStart + chunkSize;
+            if (mBuffer.size() < chunkDataEnd + 2) {
+                return false;
+            }
+
+            body.append(mBuffer.substr(chunkDataStart, chunkSize));
+            pos = chunkDataEnd + 2;
+        }
+    }
+
+    if (mBuffer.size() > mHeaderEnd + 4) {
+        mBodyRaw = mBuffer.substr(mHeaderEnd + 4);
+    }
+
+
     if (mBuffer.size() > mHeaderEnd + 4) {
         mBodyRaw = mBuffer.substr(mHeaderEnd + 4);
     }
@@ -140,7 +184,7 @@ nlohmann::json HttpParser::getBodyJson() const {
     if (ct.find("application/json") != std::string::npos) {
         try {
             body = nlohmann::json::parse(mBodyRaw);
-        } catch (const std::exception& e) {
+        } catch (const std::exception &e) {
             std::cerr << "[HttpParser] JSON parse error: " << e.what() << std::endl;
         }
     }

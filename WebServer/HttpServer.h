@@ -10,19 +10,17 @@
 #include <memory>
 #include "HttpConnection.h"
 #include "SafeQueue.hpp"
-#include "Task.h"
+#include "../HiveMind/HiveCommand.h"
 
 class HttpServer {
 public:
-    HttpServer(int port, std::shared_ptr<SafeQueue<Task>> queue);
+    HttpServer(int port, std::shared_ptr<SafeQueue<HttpRequest>> queue);
     ~HttpServer();
 
     void start();
     void stop();
 
 private:
-    Task requestToTask(const HttpRequest &request);
-
     void run();
     void handleNewConnection();
     void handleClientData(int clientFd);
@@ -34,7 +32,7 @@ private:
     std::atomic<bool> mRunning{false};
     std::thread mThread;
 
-    std::shared_ptr<SafeQueue<Task>> mQueue;
+    std::shared_ptr<SafeQueue<HttpRequest>> mQueue;
 
     std::unordered_map<int, std::unique_ptr<HttpConnection>> mConnections;
 };

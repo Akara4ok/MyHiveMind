@@ -1,6 +1,3 @@
-add_library(Common
-        Task.cpp Task.h
-        SafeQueue.hpp
-)
+add_library(Common INTERFACE SafeQueue.hpp)
 
-target_include_directories(Common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(Common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})

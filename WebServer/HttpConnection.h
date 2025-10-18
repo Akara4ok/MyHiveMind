@@ -13,18 +13,16 @@
 class HttpConnection {
 public:
     HttpConnection(int fd);
-
-    HttpConnection(const HttpConnection&) = delete;
-    HttpConnection& operator=(const HttpConnection&) = delete;
+    HttpConnection(const HttpConnection &) = delete;
+    HttpConnection &operator=(const HttpConnection &) = delete;
 
     std::optional<HttpRequest> readRequest();
-    bool writeResponse(const HttpResponse& response) const;
+    bool writeResponse(const HttpResponse &response) const;
 
     int fd() const { return mFd; }
-
     std::chrono::steady_clock::time_point mLastActive;
-private:
 
+private:
     int mFd{};
     std::string mBuffer;
     HttpParser mParse;

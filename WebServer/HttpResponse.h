@@ -12,8 +12,9 @@
 class HttpResponse {
 public:
     HttpResponse(int statusCode = 200, std::string statusMessage = "OK");
+
     void setBody(std::string body);
-    void setBody(const nlohmann::json& jsonBody);
+    void setBody(const nlohmann::json &jsonBody);
     std::string serialize() const;
 
     int statusCode = 0;

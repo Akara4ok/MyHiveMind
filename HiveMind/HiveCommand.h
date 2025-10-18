@@ -7,8 +7,8 @@
 
 #include <nlohmann/json.hpp>
 
-struct Task {
-    enum TaskType {
+struct HiveCommand {
+    enum Type {
         None,
         Stop,
         Move,
@@ -16,12 +16,13 @@ struct Task {
         SetState,
         AddInterference,
         RemoveInterference,
-        SetError,
+        Ping,
+        Connect,
     };
 
-    static TaskType intToType(int value);
+    static Type intToType(int value);
 
-    TaskType type{};
+    Type type{};
     int clientFd;
     nlohmann::json arguments;
 };

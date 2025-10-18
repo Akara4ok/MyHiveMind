@@ -17,5 +17,4 @@ struct HttpRequest {
     int clientFd{};
 };
 
-
 #endif //MYHIVEMIND_HTTPREQUEST_H

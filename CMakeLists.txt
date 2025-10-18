@@ -9,7 +9,14 @@ add_executable(MyHiveMind main.cpp)
 
 add_subdirectory(Tests)
 add_subdirectory(Common)
+add_subdirectory(HiveMind)
 add_subdirectory(WebServer)
 
-target_link_libraries(MyHiveMind PRIVATE Common WebServer)
+add_custom_command(TARGET MyHiveMind POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/appsettings.json
+        $<TARGET_FILE_DIR:MyHiveMind>/appsettings.json
+)
+
+target_link_libraries(MyHiveMind PRIVATE Common WebServer HiveMind)
 

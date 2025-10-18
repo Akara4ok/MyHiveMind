@@ -2,9 +2,9 @@
 // Created by vlad on 10/17/25.
 //
 
-#include "Task.h"
+#include "HiveCommand.h"
 
-Task::TaskType Task::intToType(int value) {
+HiveCommand::Type HiveCommand::intToType(int value) {
     switch (value) {
         case 0: return None;
         case 1: return Stop;
@@ -13,7 +13,7 @@ Task::TaskType Task::intToType(int value) {
         case 4: return SetState;
         case 5: return AddInterference;
         case 6: return RemoveInterference;
-        case 7: return SetError;
+        case 7: return Ping;
         default: return None;
     }
     return None;

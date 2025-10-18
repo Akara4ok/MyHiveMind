@@ -24,7 +24,7 @@ std::string HttpResponse::serialize() const {
 
     std::string bodyRaw = body.dump();
     oss << "Content-Length" << ": " << std::to_string(bodyRaw.size()) << "\r\n";
-    for (const auto& [key, value] : headers) {
+    for (const auto &[key, value]: headers) {
         oss << key << ": " << value << "\r\n";
     }
 

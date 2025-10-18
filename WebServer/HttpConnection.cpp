@@ -34,16 +34,15 @@ std::optional<HttpRequest> HttpConnection::readRequest() {
         reqOpt->clientFd = mFd;
     }
     return reqOpt;
-
 }
 
 bool HttpConnection::writeResponse(const HttpResponse &response) const {
     std::string data = response.serialize();
     ssize_t totalSent = 0;
-    const char* buf = data.c_str();
+    const char *buf = data.c_str();
     size_t len = data.size();
 
-    while (totalSent < (ssize_t)len) {
+    while (totalSent < (ssize_t) len) {
         ssize_t sent = ::send(mFd, buf + totalSent, len - totalSent, 0);
         if (sent <= 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {

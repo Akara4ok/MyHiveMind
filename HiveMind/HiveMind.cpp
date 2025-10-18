@@ -1,0 +1,179 @@
+//
+// Created by vlad on 10/17/25.
+//
+
+#include "HiveMind.h"
+#include <fstream>
+
+#include "HiveMindState.h"
+#include "Interference.h"
+#include "SimpleHiveLogic.h"
+#include "nlohmann/json.hpp"
+
+namespace {
+    int failedPingToReconnect = 10;
+    int connectTimeOutMs = 5000;
+}
+
+HiveMind::HiveMind(const std::string& configurationPath) {
+    std::ifstream file(configurationPath);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open configuration file " << configurationPath << std::endl;
+        return;
+    }
+    nlohmann::json config;
+    file >> config;
+
+    config = config["CommunicationConfiguration"];
+
+    mSchema = config.value("RequestSchema", "http");
+    std::string ccIP = config.value("CommunicationControlIP", "localhost");
+
+    std::string host = mSchema + "://" + ccIP;
+    int ccPort = config.value("CommunicationControlPort", 8080);
+
+    mHiveIp = config.value("HiveIP", "localhost");
+    mHivePort = config.value("HivePort", 5149);
+    mHiveId = config.value("HiveID", "");
+
+    mApiPath = "/" + config.value("CommunicationControlPath", "api/v1/hive");
+
+    std::cout << "Config read:" << std::endl;
+    std::cout << "CC: " << host << " " << ccPort << " " << mApiPath << std::endl;
+    std::cout << "Hive: " << mHiveIp << " " << mHivePort << " " << mHiveId << std::endl;
+
+    mReceivedQueue = std::make_shared<SafeQueue<HttpRequest>>();
+    mSendQueue = std::make_shared<SafeQueue<HttpClientWorker::Promise>>();
+
+    mHttpServer = std::make_unique<HttpServer>(mHivePort, mReceivedQueue);
+    mHttpServer->start();
+
+    auto client = std::make_unique<HttpClient>(host, ccPort, mHiveIp);
+    mHttpClient = std::make_unique<HttpClientWorker>(std::move(client), mSendQueue);
+    mHttpClient->start();
+
+    auto hiveLogic = std::unique_ptr<IHiveLogic>(new SimpleHiveLogic());
+    mEmulator = std::make_unique<HiveEmulator>(std::move(hiveLogic));
+    mEmulator->start();
+}
+
+HiveMind::~HiveMind() {
+    stop();
+}
+
+void HiveMind::start() {
+    if (mRunning) {
+        return;
+    }
+    mRunning = true;
+    mThread = std::thread(&HiveMind::run, this);
+}
+
+void HiveMind::stop() {
+    if (mRunning) {
+        mRunning = false;
+        if (mThread.joinable()) {
+            mThread.join();
+        }
+    }
+    if (mDoPing) {
+        mDoPing = false;
+        if (mPingThread.joinable()) {
+            mPingThread.join();
+        }
+    }
+    if (mHttpServer) {
+        mHttpServer->stop();
+    }
+    if (mHttpClient) {
+        mHttpClient->stop();
+    }
+    if (mEmulator) {
+        mEmulator->stop();
+    }
+}
+
+void HiveMind::connectToCC() {
+    std::cout << "Connecting to CC" << std::endl;
+    if (mDoPing) {
+        mDoPing = false;
+        if (mPingThread.joinable()) {
+            mPingThread.join();
+        }
+    }
+
+    HttpRequest request;
+    request.method = "POST";
+    request.path = mApiPath + "/connect";
+    request.body["HiveSchema"] = mSchema;
+    request.body["HiveIP"] = mHiveIp;
+    request.body["HivePort"] = mHivePort;
+    request.body["HiveID"] = mHiveId;
+
+    HttpClientWorker::Promise promise;
+    promise.request = std::move(request);
+    promise.onSuccess = [this](const HttpResponse& response) {
+        nlohmann::json operationalArea = response.body["OperationalArea"];
+        mPingTimeout = operationalArea.value("PingIntervalMs", 0);
+        mTelemetryTimeout = operationalArea.value("TelemetryIntervalMs", 0);
+
+        HiveMindState state;
+        state.height = operationalArea.value("InitialHeight", 0);
+        state.speed = operationalArea.value("Speed", 0);
+
+        nlohmann::json location = operationalArea["InitialLocation"];
+        state.longitude = location.value("Longitude", 0);
+        state.latitude = location.value("Latitude", 0);
+        state.state = HiveMindState::Stop;
+
+        mEmulator->setHiveMindState(state);
+
+        nlohmann::json interferences = response.body["Interferences"];
+        for (auto j: interferences) {
+            mEmulator->addInterference(Interference::fromJson(j));
+        }
+
+        std::cout << "Connected" << std::endl;
+        startPingThread();
+    };
+    promise.onFail = [this]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(connectTimeOutMs));
+        connectToCC();
+    };
+
+    mSendQueue->push_back(std::move(promise));
+}
+
+void HiveMind::startPingThread() {
+    if (mDoPing) {
+        mDoPing = false;
+        if (mPingThread.joinable()) {
+            mPingThread.join();
+        }
+    }
+
+    mPingThread = std::thread([this]() {
+        while (mDoPing) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(mPingTimeout));
+            // HttpRequest request;
+            // request.method = "GET";
+            // request.path = "/ping";
+            // request.body["timestamp"] = std::chrono::system_clock::now().time_since_epoch().count();
+            // request.body["hiveID"] = 0;
+            // mReqQueue->push_back(request);
+            std::cout << "Pinging..." << std::endl;
+        }
+    });
+}
+
+void HiveMind::run() {
+    connectToCC();
+    while (mRunning) {
+        if (mPingProcessedSinceLast > failedPingToReconnect) {
+            connectToCC();
+        }
+        while (auto req = mReceivedQueue->pop_front()) {
+            std::cout << req->method << " " << req->body.dump() << std::endl;
+        }
+    }
+}

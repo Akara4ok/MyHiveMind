@@ -7,8 +7,8 @@
 
 #include <string>
 
-#include <HttpRequest.h>
-#include <HttpResponse.h>
+#include "HttpRequest.h"
+#include "HttpResponse.h"
 
 class HttpParser {
 public:
@@ -21,10 +21,10 @@ private:
     bool tryParseHeaders();
     bool tryParseBody();
     nlohmann::json getBodyJson() const;
+
     void clear();
 
     std::string mBuffer;
-
     std::string mFirstLine;
     std::unordered_map<std::string, std::string> mHeaders;
     size_t mHeaderEnd{};
