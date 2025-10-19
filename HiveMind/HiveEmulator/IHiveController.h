@@ -1,46 +1,49 @@
 //
-// Created by vlad on 10/18/25.
+// Created by vlad on 10/19/25.
 //
 
-#ifndef MYHIVEMIND_HIVEEMULATOR_H
-#define MYHIVEMIND_HIVEEMULATOR_H
+#ifndef MYHIVEMIND_IHIVECONTROLLER_H
+#define MYHIVEMIND_IHIVECONTROLLER_H
 
 #include <condition_variable>
-#include <mutex>
 
-#include "HiveMindState.h"
 #include "IHiveLogic.h"
-#include "Interference.h"
 
-class HiveEmulator {
+class IHiveController {
 public:
-    HiveEmulator(std::unique_ptr<IHiveLogic> logic);
-    ~HiveEmulator();
+    IHiveController(std::unique_ptr<IHiveLogic> logic);
+    virtual ~IHiveController();
 
     void start();
     void stop();
 
     void doMove(double longitude, double latitude);
     void doStop();
+
     void addInterference(Interference interference);
     void removeInterference(std::string id);
     void setError(bool error);
 
     HiveMindState getHiveMindState() const;
-    void setHiveMindState(HiveMindState state);
+    void setHiveMindState(const HiveMindState &state);
+
+protected:
+    virtual void executeMove(double longitude, double latitude) = 0;
+    virtual void executeStop() = 0;
+    std::atomic<bool> mAbortPrevTasks = false;
+    HiveMindState mState;
 
 private:
-    bool isValid() const;
     void doTask(IHiveLogic::SimpleTask task);
+    bool isValid() const;
     void run();
 
     std::atomic<bool> mRunning{};
-    bool mAbortPrevTasks = false;
-    HiveMindState mState;
     mutable std::mutex mMutex;
     std::condition_variable mCond;
     std::thread mLogicThread;
     std::unique_ptr<IHiveLogic> mLogic;
 };
 
-#endif //MYHIVEMIND_HIVEEMULATOR_H
+
+#endif //MYHIVEMIND_IHIVECONTROLLER_H

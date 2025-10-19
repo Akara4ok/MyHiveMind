@@ -8,9 +8,9 @@
 
 struct HiveMindState {
     enum State {
-        Error,
         Stop,
         Move,
+        Error,
     };
 
     State state = State::Error;

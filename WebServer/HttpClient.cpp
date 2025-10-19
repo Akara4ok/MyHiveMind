@@ -67,7 +67,6 @@ bool HttpClient::ensureConnection() {
 std::optional<HttpResponse> HttpClient::sendRequest(const std::string &method, const std::string &path,
                                                     std::string body) {
     if (!ensureConnection()) {
-        std::cerr << "Failed to connect to " << mHost << ":" << mPort << std::endl;
         return {};
     }
 

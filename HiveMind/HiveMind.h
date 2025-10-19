@@ -7,12 +7,13 @@
 
 #include <SafeQueue.hpp>
 
-#include "HiveCommand.h"
-#include "HiveEmulator.h"
+#include "IHiveController.h"
 #include "HttpClient.h"
 #include "HttpClientWorker.h"
 #include "HttpRequest.h"
 #include "HttpServer.h"
+#include "Threads/PingThread.h"
+#include "Threads/TelemetryThread.h"
 
 class HiveMind {
 public:
@@ -24,14 +25,12 @@ public:
 
 private:
     void connectToCC();
-    void startPingThread();;
     void run();
 
     std::atomic<bool> mRunning{false};
-    std::atomic<bool> mDoPing{false};
+    bool mConnected{false};
+
     std::thread mThread;
-    std::thread mPingThread;
-    int mPingProcessedSinceLast = 0;
 
     std::shared_ptr<SafeQueue<HttpRequest>> mReceivedQueue;
     std::shared_ptr<SafeQueue<HttpClientWorker::Promise>> mSendQueue;
@@ -43,12 +42,11 @@ private:
     std::string mSchema;
     std::string mApiPath;
 
-    int mPingTimeout{};
-    int mTelemetryTimeout{};
-
     std::unique_ptr<HttpServer> mHttpServer;
     std::unique_ptr<HttpClientWorker> mHttpClient;
-    std::unique_ptr<HiveEmulator> mEmulator;
+    std::shared_ptr<IHiveController> mEmulator;
+    std::unique_ptr<PingThread> mPingThread;
+    std::unique_ptr<TelemetryThread> mTelemetryThread;
 };
 
 

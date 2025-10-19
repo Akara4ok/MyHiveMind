@@ -5,13 +5,14 @@
 #include "HiveMind.h"
 #include <fstream>
 
+#include "HiveEmulator.h"
 #include "HiveMindState.h"
 #include "Interference.h"
 #include "SimpleHiveLogic.h"
 #include "nlohmann/json.hpp"
 
 namespace {
-    int failedPingToReconnect = 10;
+    int failedPingToReconnect = 2;
     int connectTimeOutMs = 5000;
 }
 
@@ -53,8 +54,11 @@ HiveMind::HiveMind(const std::string& configurationPath) {
     mHttpClient->start();
 
     auto hiveLogic = std::unique_ptr<IHiveLogic>(new SimpleHiveLogic());
-    mEmulator = std::make_unique<HiveEmulator>(std::move(hiveLogic));
+    mEmulator = std::make_shared<HiveEmulator>(std::move(hiveLogic));
     mEmulator->start();
+
+    mPingThread = std::make_unique<PingThread>(mHiveId, mSendQueue);
+    mTelemetryThread = std::make_unique<TelemetryThread>(mHiveId, mApiPath, mEmulator, mSendQueue);
 }
 
 HiveMind::~HiveMind() {
@@ -76,12 +80,6 @@ void HiveMind::stop() {
             mThread.join();
         }
     }
-    if (mDoPing) {
-        mDoPing = false;
-        if (mPingThread.joinable()) {
-            mPingThread.join();
-        }
-    }
     if (mHttpServer) {
         mHttpServer->stop();
     }
@@ -91,17 +89,19 @@ void HiveMind::stop() {
     if (mEmulator) {
         mEmulator->stop();
     }
+    if (mPingThread) {
+        mPingThread->stop();
+    }
+    if (mTelemetryThread) {
+        mTelemetryThread->stop();
+    }
 }
 
 void HiveMind::connectToCC() {
-    std::cout << "Connecting to CC" << std::endl;
-    if (mDoPing) {
-        mDoPing = false;
-        if (mPingThread.joinable()) {
-            mPingThread.join();
-        }
-    }
+    mPingThread->stop();
+    mTelemetryThread->stop();
 
+    std::cout << "Connecting to CC" << std::endl;
     HttpRequest request;
     request.method = "POST";
     request.path = mApiPath + "/connect";
@@ -114,8 +114,10 @@ void HiveMind::connectToCC() {
     promise.request = std::move(request);
     promise.onSuccess = [this](const HttpResponse& response) {
         nlohmann::json operationalArea = response.body["OperationalArea"];
-        mPingTimeout = operationalArea.value("PingIntervalMs", 0);
-        mTelemetryTimeout = operationalArea.value("TelemetryIntervalMs", 0);
+        int pingTimeout = operationalArea.value("PingIntervalMs", 0);
+        pingTimeout = 5000;
+        int telemetryTimeOut = operationalArea.value("TelemetryIntervalMs", 0);
+        telemetryTimeOut = 5050;
 
         HiveMindState state;
         state.height = operationalArea.value("InitialHeight", 0);
@@ -133,47 +135,32 @@ void HiveMind::connectToCC() {
             mEmulator->addInterference(Interference::fromJson(j));
         }
 
+        mConnected = true;
         std::cout << "Connected" << std::endl;
-        startPingThread();
+        mPingThread->start(pingTimeout);
+        mTelemetryThread->start(telemetryTimeOut);
     };
     promise.onFail = [this]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(connectTimeOutMs));
+        mConnected = false;
         connectToCC();
     };
 
     mSendQueue->push_back(std::move(promise));
 }
 
-void HiveMind::startPingThread() {
-    if (mDoPing) {
-        mDoPing = false;
-        if (mPingThread.joinable()) {
-            mPingThread.join();
-        }
-    }
-
-    mPingThread = std::thread([this]() {
-        while (mDoPing) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(mPingTimeout));
-            // HttpRequest request;
-            // request.method = "GET";
-            // request.path = "/ping";
-            // request.body["timestamp"] = std::chrono::system_clock::now().time_since_epoch().count();
-            // request.body["hiveID"] = 0;
-            // mReqQueue->push_back(request);
-            std::cout << "Pinging..." << std::endl;
-        }
-    });
-}
-
 void HiveMind::run() {
     connectToCC();
     while (mRunning) {
-        if (mPingProcessedSinceLast > failedPingToReconnect) {
-            connectToCC();
-        }
-        while (auto req = mReceivedQueue->pop_front()) {
+        while (const auto req = mReceivedQueue->pop_front()) {
             std::cout << req->method << " " << req->body.dump() << std::endl;
+        }
+        if (!mConnected) {
+            continue;
+        }
+        if (mPingThread->getPingFailed() >= failedPingToReconnect) {
+            mConnected = false;
+            connectToCC();
         }
     }
 }

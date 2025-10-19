@@ -34,7 +34,7 @@ public:
 
     std::optional<T> pop_front() {
         std::unique_lock lock(mMutex);
-        mCond.wait(lock, [this] { return mClosed || !empty(); });
+        mCond.wait_for(lock, std::chrono::milliseconds(500), [this] { return mClosed || !empty(); });
 
         if (empty() || mClosed) {
             return {};

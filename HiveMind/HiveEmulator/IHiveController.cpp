@@ -1,35 +1,34 @@
 //
-// Created by vlad on 10/18/25.
+// Created by vlad on 10/19/25.
 //
 
-#include "HiveEmulator.h"
+#include "IHiveController.h"
 
 #include <iostream>
-#include <utility>
 
-HiveEmulator::HiveEmulator(std::unique_ptr<IHiveLogic> logic) : mLogic(std::move(logic)) {
+IHiveController::IHiveController(std::unique_ptr<IHiveLogic> logic) : mLogic(std::move(logic)) {
 }
 
-HiveEmulator::~HiveEmulator() {
+IHiveController::~IHiveController() {
     stop();
 }
 
-void HiveEmulator::start() {
+void IHiveController::start() {
     if (mRunning) {
         return;
     }
     mRunning = true;
-    mLogicThread = std::thread(&HiveEmulator::run, this);
+    mLogicThread = std::thread(&IHiveController::run, this);
 }
 
-void HiveEmulator::stop() {
+void IHiveController::stop() {
     mRunning = false;
     if (mLogicThread.joinable()) {
         mLogicThread.join();
     }
 }
 
-void HiveEmulator::doMove(double longitude, double latitude) {
+void IHiveController::doMove(double longitude, double latitude) {
     if (!isValid()) {
         std::cerr << "State is not valid";
         return;
@@ -40,7 +39,7 @@ void HiveEmulator::doMove(double longitude, double latitude) {
     mCond.notify_one();
 }
 
-void HiveEmulator::doStop() {
+void IHiveController::doStop() {
     if (!isValid()) {
         std::cerr << "State is not valid";
         return;
@@ -51,7 +50,7 @@ void HiveEmulator::doStop() {
     mCond.notify_one();
 }
 
-void HiveEmulator::addInterference(Interference interference) {
+void IHiveController::addInterference(Interference interference) {
     if (!isValid()) {
         std::cerr << "State is not valid";
         return;
@@ -62,7 +61,7 @@ void HiveEmulator::addInterference(Interference interference) {
     mCond.notify_one();
 }
 
-void HiveEmulator::removeInterference(std::string id) {
+void IHiveController::removeInterference(std::string id) {
     if (!isValid()) {
         std::cerr << "State is not valid";
         return;
@@ -73,29 +72,38 @@ void HiveEmulator::removeInterference(std::string id) {
     mCond.notify_one();
 }
 
-void HiveEmulator::setError(bool error) {
+void IHiveController::setError(bool error) {
     std::unique_lock lock(mMutex);
     mState.state = error ? HiveMindState::Error : HiveMindState::Stop;
+    mAbortPrevTasks = true;
 }
 
-HiveMindState HiveEmulator::getHiveMindState() const {
+HiveMindState IHiveController::getHiveMindState() const {
     std::unique_lock lock(mMutex);
     return mState;
 }
 
-void HiveEmulator::setHiveMindState(HiveMindState state) {
+void IHiveController::setHiveMindState(const HiveMindState &state) {
     std::unique_lock lock(mMutex);
     mState = state;
+    mAbortPrevTasks = true;
 }
 
-bool HiveEmulator::isValid() const {
+void IHiveController::doTask(IHiveLogic::SimpleTask task) {
+    switch (task.type) {
+        case IHiveLogic::SimpleTask::Stop: executeStop();
+            return;
+        case IHiveLogic::SimpleTask::Move: executeMove(task.longitude, task.latitude);
+            return;
+        default: std::cerr << "Unknown task " << task.type << std::endl;
+    }
+}
+
+bool IHiveController::isValid() const {
     return mState.state != HiveMindState::Error;
 }
 
-void HiveEmulator::doTask(IHiveLogic::SimpleTask task) {
-}
-
-void HiveEmulator::run() {
+void IHiveController::run() {
     while (mRunning) {
         std::unique_lock lock(mMutex);
         mCond.wait(lock, [this] { return mRunning || mLogic->taskCount() > 0; });
