@@ -9,18 +9,15 @@
 
 struct HiveCommand {
     enum Type {
-        None,
+        NotFound,
         Stop,
         Move,
         GetTelemetry,
-        SetState,
         AddInterference,
         RemoveInterference,
         Ping,
-        Connect,
+        WrongArgument
     };
-
-    static Type intToType(int value);
 
     Type type{};
     int clientFd;

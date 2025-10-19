@@ -8,6 +8,7 @@
 #include "HiveEmulator.h"
 #include "HiveMindState.h"
 #include "Interference.h"
+#include "RequestProcessor.h"
 #include "SimpleHiveLogic.h"
 #include "nlohmann/json.hpp"
 
@@ -16,7 +17,7 @@ namespace {
     int connectTimeOutMs = 5000;
 }
 
-HiveMind::HiveMind(const std::string& configurationPath) {
+HiveMind::HiveMind(const std::string &configurationPath) {
     std::ifstream file(configurationPath);
     if (!file.is_open()) {
         std::cerr << "Failed to open configuration file " << configurationPath << std::endl;
@@ -112,20 +113,18 @@ void HiveMind::connectToCC() {
 
     HttpClientWorker::Promise promise;
     promise.request = std::move(request);
-    promise.onSuccess = [this](const HttpResponse& response) {
+    promise.onSuccess = [this](const HttpResponse &response) {
         nlohmann::json operationalArea = response.body["OperationalArea"];
         int pingTimeout = operationalArea.value("PingIntervalMs", 0);
-        pingTimeout = 5000;
         int telemetryTimeOut = operationalArea.value("TelemetryIntervalMs", 0);
-        telemetryTimeOut = 5050;
 
         HiveMindState state;
-        state.height = operationalArea.value("InitialHeight", 0);
-        state.speed = operationalArea.value("Speed", 0);
+        state.height = operationalArea.value("InitialHeight", 0.0);
+        state.speed = operationalArea.value("Speed", 0.0);
 
         nlohmann::json location = operationalArea["InitialLocation"];
-        state.longitude = location.value("Longitude", 0);
-        state.latitude = location.value("Latitude", 0);
+        state.longitude = location.value("Longitude", 0.0);
+        state.latitude = location.value("Latitude", 0.0);
         state.state = HiveMindState::Stop;
 
         mEmulator->setHiveMindState(state);
@@ -153,7 +152,37 @@ void HiveMind::run() {
     connectToCC();
     while (mRunning) {
         while (const auto req = mReceivedQueue->pop_front()) {
-            std::cout << req->method << " " << req->body.dump() << std::endl;
+            auto command = RequestProcessor::toCommand(*req);
+            switch (command.type) {
+                case HiveCommand::AddInterference: {
+                    Interference interference = Interference::fromJson(command.arguments);
+                    mEmulator->addInterference(interference);
+                    sendTelemetry(command.clientFd);
+                    break;
+                }
+                case HiveCommand::RemoveInterference: {
+                    std::string id = command.arguments["Id"];
+                    mEmulator->removeInterference(id);
+                    sendTelemetry(command.clientFd);
+                    break;
+                }
+                case HiveCommand::Stop: {
+                    mEmulator->doStop();
+                    sendTelemetry(command.clientFd);
+                    break;
+                }
+                case HiveCommand::Move: {
+                    double lon = command.arguments["Longitude"];
+                    double lat = command.arguments["Latitude"];
+                    mEmulator->doMove(lon, lat);
+                    sendTelemetry(command.clientFd);
+                    break;
+                }
+                default: {
+                    std::cout << req->method << " " << req->path << " " << req->body.dump() << std::endl;
+                    break;
+                }
+            }
         }
         if (!mConnected) {
             continue;
@@ -162,5 +191,13 @@ void HiveMind::run() {
             mConnected = false;
             connectToCC();
         }
+    }
+}
+
+void HiveMind::sendTelemetry(int clientFd) {
+    HttpResponse response;
+    response.setBody(mTelemetryThread->createTelemetry());
+    if (!HttpConnection(clientFd).writeResponse(response)) {
+        std::cerr << "Failed to send Telemetry" << std::endl;
     }
 }

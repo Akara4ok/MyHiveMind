@@ -26,6 +26,7 @@ public:
 private:
     void connectToCC();
     void run();
+    void sendTelemetry(int clientFd);
 
     std::atomic<bool> mRunning{false};
     bool mConnected{false};

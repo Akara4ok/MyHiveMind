@@ -105,16 +105,14 @@ bool IHiveController::isValid() const {
 
 void IHiveController::run() {
     while (mRunning) {
-        std::unique_lock lock(mMutex);
-        mCond.wait(lock, [this] { return mRunning || mLogic->taskCount() > 0; });
-
-        if (mLogic->taskCount() == 0 || !mRunning) {
-            return;
+        {
+            std::unique_lock lock(mMutex);
+            mCond.wait(lock, [this] { return !mRunning || mLogic->taskCount() > 0; });
+            mAbortPrevTasks = false;
         }
 
         auto task = mLogic->popTask();
         if (!task) {
-            std::cerr << "Failed to pop task";
             continue;
         }
         doTask(*task);

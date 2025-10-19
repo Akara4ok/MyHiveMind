@@ -32,6 +32,7 @@ protected:
     virtual void executeStop() = 0;
     std::atomic<bool> mAbortPrevTasks = false;
     HiveMindState mState;
+    mutable std::mutex mMutex;
 
 private:
     void doTask(IHiveLogic::SimpleTask task);
@@ -39,7 +40,6 @@ private:
     void run();
 
     std::atomic<bool> mRunning{};
-    mutable std::mutex mMutex;
     std::condition_variable mCond;
     std::thread mLogicThread;
     std::unique_ptr<IHiveLogic> mLogic;

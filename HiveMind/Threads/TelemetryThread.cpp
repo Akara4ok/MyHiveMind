@@ -33,6 +33,21 @@ void TelemetryThread::stop() {
     }
 }
 
+nlohmann::json TelemetryThread::createTelemetry() const {
+    auto state = mEmulator->getHiveMindState();
+
+    nlohmann::json body;
+    body["HiveID"] = mHiveID;
+    nlohmann::json location;
+    location["Latitude"] = state.latitude;
+    location["Longitude"] = state.longitude;
+    body["Location"] = location;
+    body["Speed"] = state.speed;
+    body["Height"] = state.height;
+    body["State"] = state.state + 1;
+    return body;
+}
+
 void TelemetryThread::run() {
     int quant = mTelemetryTimeOut / 100;
     while (mRunning) {
@@ -54,20 +69,10 @@ void TelemetryThread::run() {
             return;
         }
 
-        auto state = mEmulator->getHiveMindState();
-
         HttpRequest request;
         request.method = "POST";
         request.path = mAPIPath + "/telemetry";
-        request.body["HiveID"] = mHiveID;
-
-        nlohmann::json location;
-        location["Latitude"] = state.latitude;
-        location["Longitude"] = state.longitude;
-        request.body["Location"] = location;
-        request.body["Speed"] = state.speed;
-        request.body["Height"] = state.height;
-        request.body["State"] = state.state + 1;
+        request.body = createTelemetry();
 
         promise.request = std::move(request);
         promise.onSuccess = [](const HttpResponse &response) {

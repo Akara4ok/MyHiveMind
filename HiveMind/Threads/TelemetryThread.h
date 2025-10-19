@@ -20,6 +20,7 @@ public:
 
     void start(int telemetryTimeOut);
     void stop();
+    nlohmann::json createTelemetry() const;
 
 private:
     void run();

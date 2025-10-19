@@ -4,11 +4,13 @@
 
 #include "SimpleHiveLogic.h"
 
+#include <iostream>
+
 bool SimpleHiveLogic::doMove(const HiveMindState &state, double latitude, double longitude) {
     mTaskQueue.push(SimpleTask{
         SimpleTask::Move,
-        latitude,
         longitude,
+        latitude,
     });
     return true;
 }
@@ -20,10 +22,12 @@ bool SimpleHiveLogic::doStop() {
 
 bool SimpleHiveLogic::addInterference(const HiveMindState &state, Interference interference) {
     mInterferenceCount++;
+    std::cout << "Interference added. Total count: " << mInterferenceCount << std::endl;
     return false;
 }
 
 bool SimpleHiveLogic::removeInterference(const HiveMindState &state, std::string id) {
     mInterferenceCount--;
+    std::cout << "Interference removed. Total count: " << mInterferenceCount << std::endl;
     return false;
 }
