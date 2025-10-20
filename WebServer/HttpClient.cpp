@@ -53,7 +53,6 @@ bool HttpClient::ensureConnection() {
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(mPort);
     inet_pton(AF_INET, mHost.c_str(), &serv_addr.sin_addr);
-
     if (connect(mSock, (sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
         std::cerr << "Failed to connect to " << mHost << ":" << mPort << std::endl;
         close(mSock);

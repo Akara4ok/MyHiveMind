@@ -50,7 +50,7 @@ HiveMind::HiveMind(const std::string &configurationPath) {
     mHttpServer = std::make_unique<HttpServer>(mHivePort, mReceivedQueue);
     mHttpServer->start();
 
-    auto client = std::make_unique<HttpClient>(host, ccPort, mHiveIp);
+    auto client = std::make_unique<HttpClient>(ccIP, ccPort, mHiveIp);
     mHttpClient = std::make_unique<HttpClientWorker>(std::move(client), mSendQueue);
     mHttpClient->start();
 
