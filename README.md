@@ -20,5 +20,5 @@
 =============================
 
 10. docker compose build
-    *. docker rm $(docker ps -aq) (optional)
-11. docker compose up
+11. docker rm $(docker ps -aq) (optional)
+12. docker compose up
