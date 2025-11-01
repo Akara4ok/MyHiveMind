@@ -1,20 +1,27 @@
 {
-
+  "Redis": {
+    "ConnectionString": "redis:6379",
+    "PublishChannel": "HiveChannel"
+  },
+  "RedisKeys": {
+    "HiveKey": "Hive",
+    "InterferenceKey": "Interference"
+  },
+  "OperationalArea": {
+    "Latitude": 48.697189,
+    "Longitude": 38.066246,
+    "Radius_KM": 5,
+    "InitialHeight_KM": 1,
+    "InitialSpeed_KM": 5,
+    "TelemetryInterval_MS": 1000,
+    "PingInterval_MS": 5000
+  },
   "CommunicationConfiguration": {
-    "RequestSchema": "http",
-    "CommunicationControlIP": "172.17.0.1",
-    "CommunicationControlPort": 8080,
-    "CommunicationControlPath": "api/v1/hive",
-    "HiveIP": "hivemind",
-    "HivePort": 5149,
-    "HiveID": "1",
-    "InitialLocation": {
-      "Latitude": 48.719547,
-      "Longitude": 38.092680
-    }
+    "HiveMindPath": "api/v1"
   },
   "AllowedHosts": "*",
-  "Urls": "http://0.0.0.0:5149",
+  "Urls": "http://0.0.0.0:8080",
+  "BasePath": "",
   "Serilog": {
     "Using": [ "Serilog.Sinks.Console", "Serilog.Sinks.File" ],
     "MinimumLevel": {
@@ -44,9 +51,8 @@
     ],
     "Enrich": [ "FromLogContext", "WithMachineName", "WithProcessId", "WithThreadId" ],
     "Properties": {
-      "Application": "DevOpsProject.HiveMind",
+      "Application": "DevOpsProject.CommunicationControl",
       "Environment": "Development"
     }
   }
-
 }

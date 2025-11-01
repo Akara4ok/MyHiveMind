@@ -1,0 +1,46 @@
+services:
+  hivemind:
+    build:
+      context: ./MyHiveMind
+      dockerfile: Dockerfile
+    container_name: hivemind
+    ports:
+      - "5149:5149"
+
+  communication:
+    build:
+      context: ./hiveemulator/src/CommunicationControl
+      dockerfile: DevOpsProject/Dockerfile
+    container_name: communication
+    ports:
+      - "8080:8080"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    
+  client:
+    build:
+      context: ./hiveemulator/src/MapClient
+      dockerfile: Dockerfile
+    container_name: client
+    ports:
+      - "3000:80"
+
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  redis_data:
