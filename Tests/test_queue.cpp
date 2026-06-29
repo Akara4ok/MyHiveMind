@@ -7,7 +7,7 @@
 #include "SafeQueue.hpp"
 #include <thread>
 
-TEST_CASE("Lock free queue test", "[Common]") {
+TEST_CASE("Queue test", "[Common]") {
     SafeQueue<int> q;
     constexpr int items = 1'000'000;
 
